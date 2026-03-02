@@ -73,33 +73,60 @@ soil_type = uscs_classification(LL, PI, sand, gravel, fines)
 def regional_prediction(region, soil_type):
     database = {
         "North": {
+            # Fine-grained
             "CL – Lean Clay": {"OMC":14, "MDD":1.85, "CBR":8, "k":1e-7},
             "CH – Fat Clay": {"OMC":18, "MDD":1.65, "CBR":3, "k":1e-9},
             "ML – Silt": {"OMC":12, "MDD":1.90, "CBR":10, "k":1e-6},
             "MH – Elastic Silt": {"OMC":16, "MDD":1.70, "CBR":5, "k":1e-8},
+            # Coarse-grained
+            "GW – Well-graded gravel/sand": {"OMC":12, "MDD":1.95, "CBR":20, "k":1e-5},
+            "GP – Poorly-graded gravel": {"OMC":11, "MDD":1.90, "CBR":15, "k":5e-6},
+            "SW – Well-graded sand": {"OMC":10, "MDD":1.92, "CBR":18, "k":1e-5},
+            "SP – Poorly-graded sand": {"OMC":9, "MDD":1.88, "CBR":12, "k":8e-6},
+            "GM – Silty gravel": {"OMC":14, "MDD":1.85, "CBR":10, "k":1e-7},
+            "GC – Clayey gravel": {"OMC":16, "MDD":1.80, "CBR":8, "k":1e-8},
         },
         "South": {
             "CL – Lean Clay": {"OMC":16, "MDD":1.80, "CBR":6, "k":1e-8},
             "CH – Fat Clay": {"OMC":20, "MDD":1.60, "CBR":2, "k":1e-10},
             "ML – Silt": {"OMC":13, "MDD":1.88, "CBR":9, "k":1e-6},
             "MH – Elastic Silt": {"OMC":17, "MDD":1.68, "CBR":4, "k":1e-8},
+            # Coarse-grained
+            "GW – Well-graded gravel/sand": {"OMC":13, "MDD":1.93, "CBR":18, "k":1e-5},
+            "GP – Poorly-graded gravel": {"OMC":12, "MDD":1.90, "CBR":14, "k":5e-6},
+            "SW – Well-graded sand": {"OMC":11, "MDD":1.90, "CBR":16, "k":1e-5},
+            "SP – Poorly-graded sand": {"OMC":10, "MDD":1.87, "CBR":12, "k":8e-6},
+            "GM – Silty gravel": {"OMC":15, "MDD":1.83, "CBR":9, "k":1e-7},
+            "GC – Clayey gravel": {"OMC":17, "MDD":1.78, "CBR":7, "k":1e-8},
         },
         "East": {
             "CL – Lean Clay": {"OMC":15, "MDD":1.82, "CBR":7, "k":1e-8},
             "CH – Fat Clay": {"OMC":19, "MDD":1.62, "CBR":3, "k":1e-9},
             "ML – Silt": {"OMC":12, "MDD":1.92, "CBR":11, "k":1e-6},
             "MH – Elastic Silt": {"OMC":16, "MDD":1.72, "CBR":5, "k":1e-8},
+            # Coarse-grained
+            "GW – Well-graded gravel/sand": {"OMC":12, "MDD":1.94, "CBR":19, "k":1e-5},
+            "GP – Poorly-graded gravel": {"OMC":11, "MDD":1.89, "CBR":14, "k":5e-6},
+            "SW – Well-graded sand": {"OMC":10, "MDD":1.91, "CBR":17, "k":1e-5},
+            "SP – Poorly-graded sand": {"OMC":9, "MDD":1.88, "CBR":13, "k":8e-6},
+            "GM – Silty gravel": {"OMC":14, "MDD":1.84, "CBR":9, "k":1e-7},
+            "GC – Clayey gravel": {"OMC":16, "MDD":1.79, "CBR":7, "k":1e-8},
         },
         "West/Freetown": {
             "CL – Lean Clay": {"OMC":17, "MDD":1.78, "CBR":5, "k":1e-8},
             "CH – Fat Clay": {"OMC":21, "MDD":1.58, "CBR":2, "k":1e-10},
             "ML – Silt": {"OMC":14, "MDD":1.85, "CBR":8, "k":1e-6},
             "MH – Elastic Silt": {"OMC":18, "MDD":1.65, "CBR":4, "k":1e-8},
+            # Coarse-grained
+            "GW – Well-graded gravel/sand": {"OMC":13, "MDD":1.92, "CBR":17, "k":1e-5},
+            "GP – Poorly-graded gravel": {"OMC":12, "MDD":1.88, "CBR":14, "k":5e-6},
+            "SW – Well-graded sand": {"OMC":11, "MDD":1.90, "CBR":16, "k":1e-5},
+            "SP – Poorly-graded sand": {"OMC":10, "MDD":1.87, "CBR":12, "k":8e-6},
+            "GM – Silty gravel": {"OMC":15, "MDD":1.83, "CBR":9, "k":1e-7},
+            "GC – Clayey gravel": {"OMC":17, "MDD":1.78, "CBR":7, "k":1e-8},
         }
     }
     return database.get(region, {}).get(soil_type, None)
-
-predicted = regional_prediction(region, soil_type)
 
 # -------------------------------
 # PLASTICITY CHART
