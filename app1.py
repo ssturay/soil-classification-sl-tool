@@ -73,12 +73,10 @@ soil_type = uscs_classification(LL, PI, sand, gravel, fines)
 def regional_prediction(region, soil_type):
     database = {
         "North": {
-            # Fine-grained
             "CL – Lean Clay": {"OMC":14, "MDD":1.85, "CBR":8, "k":1e-7},
             "CH – Fat Clay": {"OMC":18, "MDD":1.65, "CBR":3, "k":1e-9},
             "ML – Silt": {"OMC":12, "MDD":1.90, "CBR":10, "k":1e-6},
             "MH – Elastic Silt": {"OMC":16, "MDD":1.70, "CBR":5, "k":1e-8},
-            # Coarse-grained
             "GW – Well-graded gravel/sand": {"OMC":12, "MDD":1.95, "CBR":20, "k":1e-5},
             "GP – Poorly-graded gravel": {"OMC":11, "MDD":1.90, "CBR":15, "k":5e-6},
             "SW – Well-graded sand": {"OMC":10, "MDD":1.92, "CBR":18, "k":1e-5},
@@ -91,7 +89,6 @@ def regional_prediction(region, soil_type):
             "CH – Fat Clay": {"OMC":20, "MDD":1.60, "CBR":2, "k":1e-10},
             "ML – Silt": {"OMC":13, "MDD":1.88, "CBR":9, "k":1e-6},
             "MH – Elastic Silt": {"OMC":17, "MDD":1.68, "CBR":4, "k":1e-8},
-            # Coarse-grained
             "GW – Well-graded gravel/sand": {"OMC":13, "MDD":1.93, "CBR":18, "k":1e-5},
             "GP – Poorly-graded gravel": {"OMC":12, "MDD":1.90, "CBR":14, "k":5e-6},
             "SW – Well-graded sand": {"OMC":11, "MDD":1.90, "CBR":16, "k":1e-5},
@@ -104,7 +101,6 @@ def regional_prediction(region, soil_type):
             "CH – Fat Clay": {"OMC":19, "MDD":1.62, "CBR":3, "k":1e-9},
             "ML – Silt": {"OMC":12, "MDD":1.92, "CBR":11, "k":1e-6},
             "MH – Elastic Silt": {"OMC":16, "MDD":1.72, "CBR":5, "k":1e-8},
-            # Coarse-grained
             "GW – Well-graded gravel/sand": {"OMC":12, "MDD":1.94, "CBR":19, "k":1e-5},
             "GP – Poorly-graded gravel": {"OMC":11, "MDD":1.89, "CBR":14, "k":5e-6},
             "SW – Well-graded sand": {"OMC":10, "MDD":1.91, "CBR":17, "k":1e-5},
@@ -117,7 +113,6 @@ def regional_prediction(region, soil_type):
             "CH – Fat Clay": {"OMC":21, "MDD":1.58, "CBR":2, "k":1e-10},
             "ML – Silt": {"OMC":14, "MDD":1.85, "CBR":8, "k":1e-6},
             "MH – Elastic Silt": {"OMC":18, "MDD":1.65, "CBR":4, "k":1e-8},
-            # Coarse-grained
             "GW – Well-graded gravel/sand": {"OMC":13, "MDD":1.92, "CBR":17, "k":1e-5},
             "GP – Poorly-graded gravel": {"OMC":12, "MDD":1.88, "CBR":14, "k":5e-6},
             "SW – Well-graded sand": {"OMC":11, "MDD":1.90, "CBR":16, "k":1e-5},
@@ -127,6 +122,8 @@ def regional_prediction(region, soil_type):
         }
     }
     return database.get(region, {}).get(soil_type, None)
+
+predicted = regional_prediction(region, soil_type)
 
 # -------------------------------
 # PLASTICITY CHART
@@ -138,7 +135,7 @@ def plot_plasticity_chart(LL, PI):
     LL_line = np.linspace(20, 100, 200)
     PI_A = 0.73 * (LL_line - 20)
 
-    # Shaded zones
+    # Shaded zones for fine soils
     LL_cl = np.linspace(20, 50, 200)
     PI_cl = 0.73 * (LL_cl - 20)
     ax.fill_between(LL_cl, PI_cl, 60, alpha=0.4, label="CL")
@@ -148,12 +145,8 @@ def plot_plasticity_chart(LL, PI):
     ax.fill_between(LL_ch, PI_ch, 60, alpha=0.4, label="CH")
     ax.fill_between(LL_ch, 0, PI_ch, alpha=0.4, label="MH")
 
-    # A-line
     ax.plot(LL_line, PI_A, 'k-', label='A-line')
-
-    # Sample point
     ax.plot(LL, PI, 'ro', markersize=8, label='Sample')
-
     ax.set_xlabel("Liquid Limit (LL)")
     ax.set_ylabel("Plasticity Index (PI)")
     ax.set_title("USCS Plasticity Chart")
@@ -162,7 +155,7 @@ def plot_plasticity_chart(LL, PI):
     return fig
 
 # -------------------------------
-# OUTPUT
+# DISPLAY OUTPUT
 # -------------------------------
 col1, col2 = st.columns(2)
 
