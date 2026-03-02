@@ -2,12 +2,7 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 
-st.set_page_config(layout="wide")
-
-# -------------------------------
-# PAGE TITLE
-# -------------------------------
-st.title("Sierra Leone Soil Classification & Prediction Tool")
+st.set_page_config(layout="wide", page_title="SL Soil Classification Tool")
 
 # -------------------------------
 # SIDEBAR INPUTS
@@ -22,90 +17,108 @@ region = st.sidebar.selectbox(
 LL = st.sidebar.number_input("Liquid Limit (LL)", min_value=0.0, max_value=120.0, value=45.0)
 PL = st.sidebar.number_input("Plastic Limit (PL)", min_value=0.0, max_value=120.0, value=25.0)
 
-# Compute PI
-PI = LL - PL
+fines = st.sidebar.number_input("Fines (%)", min_value=0.0, max_value=100.0, value=20.0)
+sand = st.sidebar.number_input("Sand (%)", min_value=0.0, max_value=100.0, value=40.0)
+gravel = st.sidebar.number_input("Gravel (%)", min_value=0.0, max_value=100.0, value=40.0)
+
+# Compute Plasticity Index
+PI = LL - PL if LL and PL else None
 
 # -------------------------------
-# USCS CLASSIFICATION FUNCTION
+# USCS CLASSIFICATION FUNCTIONS
 # -------------------------------
-def classify_uscs_fines(LL, PI):
-    A_line = 0.73 * (LL - 20)
-
-    if LL < 50 and PI >= A_line:
-        return "CL – Lean Clay"
-    elif LL < 50 and PI < A_line:
-        return "ML – Silt"
-    elif LL >= 50 and PI >= A_line:
-        return "CH – Fat Clay"
-    elif LL >= 50 and PI < A_line:
-        return "MH – Elastic Silt"
+def classify_uscs_coarse(sand, gravel, fines):
+    if sand is None or gravel is None or fines is None:
+        return "Undetermined"
+    total = sand + gravel
+    if total == 0:
+        return "Undetermined"
+    sand_ratio = sand / total
+    gravel_ratio = gravel / total
+    if fines < 12:
+        if sand_ratio >= 0.5 and gravel_ratio >= 0.5:
+            return "GW – Well-graded gravel/sand"
+        elif gravel_ratio > sand_ratio:
+            return "GP – Poorly-graded gravel"
+        else:
+            return "SP – Poorly-graded sand"
     else:
-        return "Borderline Soil"
+        if 12 <= fines <= 50:
+            return "GM – Silty gravel"
+        elif fines > 50:
+            return "GC – Clayey gravel"
+    return "Unknown"
 
-soil_type = classify_uscs_fines(LL, PI)
+def uscs_classification(LL, PI, sand, gravel, fines):
+    if fines >= 50:
+        # Fine-grained
+        A_line = 0.73 * (LL - 20)
+        if LL < 50 and PI >= A_line:
+            return "CL – Lean Clay"
+        elif LL < 50 and PI < A_line:
+            return "ML – Silt"
+        elif LL >= 50 and PI >= A_line:
+            return "CH – Fat Clay"
+        elif LL >= 50 and PI < A_line:
+            return "MH – Elastic Silt"
+    else:
+        # Coarse-grained
+        return classify_uscs_coarse(sand, gravel, fines)
+
+soil_type = uscs_classification(LL, PI, sand, gravel, fines)
 
 # -------------------------------
-# REGIONAL PREDICTION MODEL (RULE-BASED MVP)
+# REGIONAL ENGINEERING PREDICTION
 # -------------------------------
 def regional_prediction(region, soil_type):
-
     database = {
         "North": {
-            "CL – Lean Clay": {"OMC": 14, "MDD": 1.85, "CBR": 8, "k": 1e-7},
-            "CH – Fat Clay": {"OMC": 18, "MDD": 1.65, "CBR": 3, "k": 1e-9},
-            "ML – Silt": {"OMC": 12, "MDD": 1.90, "CBR": 10, "k": 1e-6},
-            "MH – Elastic Silt": {"OMC": 16, "MDD": 1.70, "CBR": 5, "k": 1e-8},
+            "CL – Lean Clay": {"OMC":14, "MDD":1.85, "CBR":8, "k":1e-7},
+            "CH – Fat Clay": {"OMC":18, "MDD":1.65, "CBR":3, "k":1e-9},
+            "ML – Silt": {"OMC":12, "MDD":1.90, "CBR":10, "k":1e-6},
+            "MH – Elastic Silt": {"OMC":16, "MDD":1.70, "CBR":5, "k":1e-8},
         },
         "South": {
-            "CL – Lean Clay": {"OMC": 16, "MDD": 1.80, "CBR": 6, "k": 1e-8},
-            "CH – Fat Clay": {"OMC": 20, "MDD": 1.60, "CBR": 2, "k": 1e-10},
-            "ML – Silt": {"OMC": 13, "MDD": 1.88, "CBR": 9, "k": 1e-6},
-            "MH – Elastic Silt": {"OMC": 17, "MDD": 1.68, "CBR": 4, "k": 1e-8},
+            "CL – Lean Clay": {"OMC":16, "MDD":1.80, "CBR":6, "k":1e-8},
+            "CH – Fat Clay": {"OMC":20, "MDD":1.60, "CBR":2, "k":1e-10},
+            "ML – Silt": {"OMC":13, "MDD":1.88, "CBR":9, "k":1e-6},
+            "MH – Elastic Silt": {"OMC":17, "MDD":1.68, "CBR":4, "k":1e-8},
         },
         "East": {
-            "CL – Lean Clay": {"OMC": 15, "MDD": 1.82, "CBR": 7, "k": 1e-8},
-            "CH – Fat Clay": {"OMC": 19, "MDD": 1.62, "CBR": 3, "k": 1e-9},
-            "ML – Silt": {"OMC": 12, "MDD": 1.92, "CBR": 11, "k": 1e-6},
-            "MH – Elastic Silt": {"OMC": 16, "MDD": 1.72, "CBR": 5, "k": 1e-8},
+            "CL – Lean Clay": {"OMC":15, "MDD":1.82, "CBR":7, "k":1e-8},
+            "CH – Fat Clay": {"OMC":19, "MDD":1.62, "CBR":3, "k":1e-9},
+            "ML – Silt": {"OMC":12, "MDD":1.92, "CBR":11, "k":1e-6},
+            "MH – Elastic Silt": {"OMC":16, "MDD":1.72, "CBR":5, "k":1e-8},
         },
         "West/Freetown": {
-            "CL – Lean Clay": {"OMC": 17, "MDD": 1.78, "CBR": 5, "k": 1e-8},
-            "CH – Fat Clay": {"OMC": 21, "MDD": 1.58, "CBR": 2, "k": 1e-10},
-            "ML – Silt": {"OMC": 14, "MDD": 1.85, "CBR": 8, "k": 1e-6},
-            "MH – Elastic Silt": {"OMC": 18, "MDD": 1.65, "CBR": 4, "k": 1e-8},
+            "CL – Lean Clay": {"OMC":17, "MDD":1.78, "CBR":5, "k":1e-8},
+            "CH – Fat Clay": {"OMC":21, "MDD":1.58, "CBR":2, "k":1e-10},
+            "ML – Silt": {"OMC":14, "MDD":1.85, "CBR":8, "k":1e-6},
+            "MH – Elastic Silt": {"OMC":18, "MDD":1.65, "CBR":4, "k":1e-8},
         }
     }
-
     return database.get(region, {}).get(soil_type, None)
 
 predicted = regional_prediction(region, soil_type)
 
 # -------------------------------
-# PLASTICITY CHART FUNCTION
+# PLASTICITY CHART
 # -------------------------------
 def plot_plasticity_chart(LL, PI):
     fig, ax = plt.subplots(figsize=(7,6))
-
     ax.set_xlim(0, 100)
     ax.set_ylim(0, 60)
-
     LL_line = np.linspace(20, 100, 200)
     PI_A = 0.73 * (LL_line - 20)
 
-    # CL Zone
+    # Shaded zones
     LL_cl = np.linspace(20, 50, 200)
     PI_cl = 0.73 * (LL_cl - 20)
     ax.fill_between(LL_cl, PI_cl, 60, alpha=0.4, label="CL")
-
-    # ML Zone
     ax.fill_between(LL_cl, 0, PI_cl, alpha=0.4, label="ML")
-
-    # CH Zone
     LL_ch = np.linspace(50, 100, 200)
     PI_ch = 0.73 * (LL_ch - 20)
     ax.fill_between(LL_ch, PI_ch, 60, alpha=0.4, label="CH")
-
-    # MH Zone
     ax.fill_between(LL_ch, 0, PI_ch, alpha=0.4, label="MH")
 
     # A-line
@@ -119,11 +132,10 @@ def plot_plasticity_chart(LL, PI):
     ax.set_title("USCS Plasticity Chart")
     ax.legend(loc="upper left")
     ax.grid(True)
-
     return fig
 
 # -------------------------------
-# MAIN OUTPUT
+# OUTPUT
 # -------------------------------
 col1, col2 = st.columns(2)
 
@@ -141,5 +153,8 @@ with col1:
 
 with col2:
     st.subheader("Plasticity Chart")
-    fig = plot_plasticity_chart(LL, PI)
-    st.pyplot(fig)
+    if fines >= 50:
+        fig = plot_plasticity_chart(LL, PI)
+        st.pyplot(fig)
+    else:
+        st.info("Plasticity chart not shown for coarse-grained soils (sand/gravel).")
