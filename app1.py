@@ -113,7 +113,7 @@ def uscs_classification(LL, PI, sand, gravel, fines):
 soil_type = uscs_classification(LL, PI, sand, gravel, fines)
 
 # -------------------------------
-# REGIONAL DATABASE (UNCHANGED)
+# REGIONAL DATABASE (Updated with South and East)
 # -------------------------------
 def regional_prediction(region, soil_type):
     database = {
@@ -128,6 +128,30 @@ def regional_prediction(region, soil_type):
             "GC – Clayey gravel": {"OMC":16, "MDD":1.80, "CBR":8, "k":1e-8},
             "SM – Silty sand": {"OMC":13, "MDD":1.87, "CBR":11, "k":1e-6},
             "SC – Clayey sand": {"OMC":15, "MDD":1.82, "CBR":9, "k":1e-7},
+        },
+        "South": {
+            "CL – Lean Clay": {"OMC":16, "MDD":1.80, "CBR":6, "k":1e-8},
+            "CH – Fat Clay": {"OMC":20, "MDD":1.60, "CBR":2, "k":1e-10},
+            "ML – Silt": {"OMC":13, "MDD":1.88, "CBR":9, "k":1e-6},
+            "MH – Elastic Silt": {"OMC":17, "MDD":1.68, "CBR":4, "k":1e-8},
+            "GP – Poorly-graded gravel": {"OMC":12, "MDD":1.90, "CBR":14, "k":5e-6},
+            "SP – Poorly-graded sand": {"OMC":10, "MDD":1.87, "CBR":12, "k":8e-6},
+            "GM – Silty gravel": {"OMC":15, "MDD":1.83, "CBR":9, "k":1e-7},
+            "GC – Clayey gravel": {"OMC":17, "MDD":1.78, "CBR":7, "k":1e-8},
+            "SM – Silty sand": {"OMC":14, "MDD":1.85, "CBR":10, "k":1e-6},
+            "SC – Clayey sand": {"OMC":16, "MDD":1.80, "CBR":8, "k":1e-7},
+        },
+        "East": {
+            "CL – Lean Clay": {"OMC":15, "MDD":1.82, "CBR":7, "k":1e-8},
+            "CH – Fat Clay": {"OMC":19, "MDD":1.62, "CBR":3, "k":1e-9},
+            "ML – Silt": {"OMC":12, "MDD":1.92, "CBR":11, "k":1e-6},
+            "MH – Elastic Silt": {"OMC":16, "MDD":1.72, "CBR":5, "k":1e-8},
+            "GP – Poorly-graded gravel": {"OMC":11, "MDD":1.89, "CBR":14, "k":5e-6},
+            "SP – Poorly-graded sand": {"OMC":9, "MDD":1.88, "CBR":13, "k":8e-6},
+            "GM – Silty gravel": {"OMC":14, "MDD":1.84, "CBR":9, "k":1e-7},
+            "GC – Clayey gravel": {"OMC":16, "MDD":1.79, "CBR":7, "k":1e-8},
+            "SM – Silty sand": {"OMC":13, "MDD":1.86, "CBR":10, "k":1e-6},
+            "SC – Clayey sand": {"OMC":15, "MDD":1.81, "CBR":8, "k":1e-7},
         },
         "West/Freetown": {
             "CL – Lean Clay": {"OMC":17, "MDD":1.78, "CBR":5, "k":1e-8},
@@ -195,7 +219,6 @@ if predicted:
     q_N = bearing_capacity_from_N(N)
     q_CBR = bearing_capacity_from_CBR(predicted["CBR"])
 
-    # ADOPTED VALUE PRIORITY
     if qall_terzaghi:
         q_allow = qall_terzaghi
         method = "Terzaghi (c-φ)"
@@ -231,12 +254,10 @@ with col1:
         st.subheader("Bearing Capacity")
         st.write(f"Terzaghi q_ult (kPa): {qult:.2f}")
         st.write(f"Terzaghi q_allow (kPa): {qall_terzaghi:.2f}")
-
         if q_N:
             st.write(f"From SPT N-value (kPa): {q_N:.2f}")
         if q_CBR:
             st.write(f"From CBR (kPa): {q_CBR:.2f}")
-
         st.success(f"Adopted q_allow ({method}): {q_allow:.2f}")
 
         st.subheader("Estimated Settlement")
