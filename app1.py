@@ -38,6 +38,7 @@ st.sidebar.header("Foundation Parameters")
 B = st.sidebar.number_input("Footing Width B (m)", 0.5, value=1.5)
 Df = st.sidebar.number_input("Foundation Depth Df (m)", 0.5, value=1.0)
 FS = st.sidebar.selectbox("Factor of Safety", [2.5, 3.0, 3.5])
+water_table = st.sidebar.number_input("Groundwater Depth (m)", 0.0, 10.0, 5.0)
 
 # -------------------------------
 # DERIVED PARAMETERS
@@ -64,16 +65,6 @@ def plot_plasticity_chart(LL, PI):
     LL_line = np.linspace(20, 100, 200)
     PI_A = 0.73 * (LL_line - 20)
 
-    LL_cl = np.linspace(20, 50, 200)
-    PI_cl = 0.73 * (LL_cl - 20)
-    ax.fill_between(LL_cl, PI_cl, 60, alpha=0.3, label="CL")
-    ax.fill_between(LL_cl, 0, PI_cl, alpha=0.3, label="ML")
-
-    LL_ch = np.linspace(50, 100, 200)
-    PI_ch = 0.73 * (LL_ch - 20)
-    ax.fill_between(LL_ch, PI_ch, 60, alpha=0.3, label="CH")
-    ax.fill_between(LL_ch, 0, PI_ch, alpha=0.3, label="MH")
-
     ax.plot(LL_line, PI_A, 'k-', label='A-line')
 
     if PI is not None:
@@ -95,7 +86,10 @@ def classify_uscs_coarse(sand, gravel, fines):
         return "Undetermined"
     sand_ratio = sand / total
     gravel_ratio = gravel / total
-    if fines < 12:
+
+    if fines < 5:
+        return "GW – Well-graded gravel" if gravel_ratio > sand_ratio else "SW – Well-graded sand"
+    elif fines < 12:
         return "GP – Poorly-graded gravel" if gravel_ratio > sand_ratio else "SP – Poorly-graded sand"
     elif 12 <= fines <= 50:
         return "GM – Silty gravel" if gravel_ratio > sand_ratio else "SM – Silty sand"
@@ -118,59 +112,51 @@ def uscs_classification(LL, PI, sand, gravel, fines):
 soil_type = uscs_classification(LL, PI, sand, gravel, fines)
 
 # -------------------------------
-# REGIONAL DATABASE (North, South, East, West)
+# AASHTO CLASSIFICATION
+# -------------------------------
+def aashto_classification(fines, LL, PI):
+    if fines <= 35:
+        return "A-1 / A-2 (Granular)"
+    elif fines > 35 and PI <= 10:
+        return "A-4 (Silty soil)"
+    elif fines > 35 and PI > 10 and LL <= 40:
+        return "A-6 (Clayey soil)"
+    elif fines > 35 and LL > 40:
+        return "A-7 (High plastic clay)"
+    else:
+        return "AASHTO Undetermined"
+
+aashto_type = aashto_classification(fines, LL, PI if PI else 0)
+
+# -------------------------------
+# REGIONAL DATABASE
 # -------------------------------
 def regional_prediction(region, soil_type):
     database = {
-        "North": {
-            "CL – Lean Clay": {"OMC":14, "MDD":1.85, "CBR":8, "k":1e-7},
-            "CH – Fat Clay": {"OMC":18, "MDD":1.65, "CBR":3, "k":1e-9},
-            "ML – Silt": {"OMC":12, "MDD":1.90, "CBR":10, "k":1e-6},
-            "MH – Elastic Silt": {"OMC":16, "MDD":1.70, "CBR":5, "k":1e-8},
-            "GP – Poorly-graded gravel": {"OMC":11, "MDD":1.90, "CBR":15, "k":5e-6},
-            "SP – Poorly-graded sand": {"OMC":9, "MDD":1.88, "CBR":12, "k":8e-6},
-            "GM – Silty gravel": {"OMC":14, "MDD":1.85, "CBR":10, "k":1e-7},
-            "GC – Clayey gravel": {"OMC":16, "MDD":1.80, "CBR":8, "k":1e-8},
-            "SM – Silty sand": {"OMC":13, "MDD":1.87, "CBR":11, "k":1e-6},
-            "SC – Clayey sand": {"OMC":15, "MDD":1.82, "CBR":9, "k":1e-7},
-        },
-        "South": {
-            "CL – Lean Clay": {"OMC":16, "MDD":1.80, "CBR":6, "k":1e-8},
-            "CH – Fat Clay": {"OMC":20, "MDD":1.60, "CBR":2, "k":1e-10},
-            "ML – Silt": {"OMC":13, "MDD":1.88, "CBR":9, "k":1e-6},
-            "MH – Elastic Silt": {"OMC":17, "MDD":1.68, "CBR":4, "k":1e-8},
-            "GP – Poorly-graded gravel": {"OMC":12, "MDD":1.90, "CBR":14, "k":5e-6},
-            "SP – Poorly-graded sand": {"OMC":10, "MDD":1.87, "CBR":12, "k":8e-6},
-            "GM – Silty gravel": {"OMC":15, "MDD":1.83, "CBR":9, "k":1e-7},
-            "GC – Clayey gravel": {"OMC":17, "MDD":1.78, "CBR":7, "k":1e-8},
-            "SM – Silty sand": {"OMC":14, "MDD":1.85, "CBR":10, "k":1e-6},
-            "SC – Clayey sand": {"OMC":16, "MDD":1.80, "CBR":8, "k":1e-7},
-        },
-        "East": {
-            "CL – Lean Clay": {"OMC":15, "MDD":1.82, "CBR":7, "k":1e-8},
-            "CH – Fat Clay": {"OMC":19, "MDD":1.62, "CBR":3, "k":1e-9},
-            "ML – Silt": {"OMC":12, "MDD":1.92, "CBR":11, "k":1e-6},
-            "MH – Elastic Silt": {"OMC":16, "MDD":1.72, "CBR":5, "k":1e-8},
-            "GP – Poorly-graded gravel": {"OMC":11, "MDD":1.89, "CBR":14, "k":5e-6},
-            "SP – Poorly-graded sand": {"OMC":9, "MDD":1.88, "CBR":13, "k":8e-6},
-            "GM – Silty gravel": {"OMC":14, "MDD":1.84, "CBR":9, "k":1e-7},
-            "GC – Clayey gravel": {"OMC":16, "MDD":1.79, "CBR":7, "k":1e-8},
-            "SM – Silty sand": {"OMC":13, "MDD":1.86, "CBR":10, "k":1e-6},
-            "SC – Clayey sand": {"OMC":15, "MDD":1.81, "CBR":8, "k":1e-7},
-        },
-        "West/Freetown": {
-            "CL – Lean Clay": {"OMC":17, "MDD":1.78, "CBR":5, "k":1e-8},
-            "CH – Fat Clay": {"OMC":21, "MDD":1.58, "CBR":2, "k":1e-10},
-            "ML – Silt": {"OMC":14, "MDD":1.85, "CBR":8, "k":1e-6},
-            "MH – Elastic Silt": {"OMC":18, "MDD":1.65, "CBR":4, "k":1e-8},
-            "GP – Poorly-graded gravel": {"OMC":12, "MDD":1.88, "CBR":14, "k":5e-6},
-            "SP – Poorly-graded sand": {"OMC":10, "MDD":1.87, "CBR":12, "k":8e-6},
-            "GM – Silty gravel": {"OMC":15, "MDD":1.83, "CBR":9, "k":1e-7},
-            "GC – Clayey gravel": {"OMC":17, "MDD":1.78, "CBR":7, "k":1e-8},
-            "SM – Silty sand": {"OMC":14, "MDD":1.85, "CBR":10, "k":1e-6},
-            "SC – Clayey sand": {"OMC":16, "MDD":1.80, "CBR":8, "k":1e-7},
-        }
+        "North": {},
+        "South": {},
+        "East": {},
+        "West/Freetown": {}
     }
+
+    base_values = {
+        "CL – Lean Clay": {"OMC":15, "MDD":1.82, "CBR":7, "k":1e-8},
+        "CH – Fat Clay": {"OMC":20, "MDD":1.60, "CBR":3, "k":1e-10},
+        "ML – Silt": {"OMC":13, "MDD":1.90, "CBR":9, "k":1e-6},
+        "MH – Elastic Silt": {"OMC":17, "MDD":1.70, "CBR":5, "k":1e-8},
+        "GW – Well-graded gravel": {"OMC":10, "MDD":1.95, "CBR":18, "k":1e-5},
+        "SW – Well-graded sand": {"OMC":9, "MDD":1.90, "CBR":15, "k":8e-6},
+        "GP – Poorly-graded gravel": {"OMC":11, "MDD":1.90, "CBR":15, "k":5e-6},
+        "SP – Poorly-graded sand": {"OMC":10, "MDD":1.88, "CBR":12, "k":8e-6},
+        "GM – Silty gravel": {"OMC":14, "MDD":1.85, "CBR":10, "k":1e-7},
+        "GC – Clayey gravel": {"OMC":16, "MDD":1.80, "CBR":8, "k":1e-8},
+        "SM – Silty sand": {"OMC":14, "MDD":1.85, "CBR":10, "k":1e-6},
+        "SC – Clayey sand": {"OMC":16, "MDD":1.80, "CBR":8, "k":1e-7},
+    }
+
+    for r in database:
+        database[r] = base_values
+
     return database.get(region, {}).get(soil_type, None)
 
 # -------------------------------
@@ -181,28 +167,35 @@ def shear_parameters(soil_type):
     if soil_type.startswith("CH"): return 50, 17
     if soil_type.startswith("ML"): return 15, 28
     if soil_type.startswith("MH"): return 20, 25
-    if soil_type.startswith(("GP", "SP")): return 5, 35
-    if soil_type.startswith(("GM", "SM", "SC", "GC")): return 20, 30
+    if soil_type.startswith(("GW","GP")): return 5, 38
+    if soil_type.startswith(("SW","SP")): return 2, 34
+    if soil_type.startswith(("GM","SM","SC","GC")): return 20, 30
     return 10, 25
 
 # -------------------------------
 # BEARING CAPACITY FUNCTIONS
 # -------------------------------
+def terzaghi_bearing_capacity(c, phi, gamma, B, Df, FS, water_table):
+    phi_rad = math.radians(phi)
+    Nq = math.exp(math.pi * math.tan(phi_rad)) * (math.tan(math.radians(45 + phi/2)) ** 2)
+    Nc = (Nq - 1) / math.tan(phi_rad) if phi > 0 else 5.7
+    Ngamma = 2 * (Nq + 1) * math.tan(phi_rad)
+
+    if water_table <= Df:
+        gamma_eff = gamma - 9.81
+    else:
+        gamma_eff = gamma
+
+    q = gamma_eff * Df
+    qult = c * Nc + q * Nq + 0.5 * gamma_eff * B * Ngamma
+    qall = qult / FS
+    return qult, qall
+
 def bearing_capacity_from_N(N):
     return 12 * N if N > 0 else None
 
 def bearing_capacity_from_CBR(CBR):
     return 2.5 * CBR if CBR else None
-
-def terzaghi_bearing_capacity(c, phi, gamma, B, Df, FS):
-    phi_rad = math.radians(phi)
-    Nq = math.exp(math.pi * math.tan(phi_rad)) * (math.tan(math.radians(45 + phi/2)) ** 2)
-    Nc = (Nq - 1) / math.tan(phi_rad) if phi > 0 else 5.7
-    Ngamma = 2 * (Nq + 1) * math.tan(phi_rad)
-    q = gamma * Df
-    qult = c * Nc + q * Nq + 0.5 * gamma * B * Ngamma
-    qall = qult / FS
-    return qult, qall
 
 def settlement_from_spt(N, B):
     return (25 * B) / N if N > 0 else None
@@ -215,18 +208,10 @@ predicted = regional_prediction(region, soil_type)
 if predicted:
     c, phi = shear_parameters(soil_type)
     gamma = predicted["MDD"] * 9.81
-    qult, qall_terzaghi = terzaghi_bearing_capacity(c, phi, gamma, B, Df, FS)
+    qult, qall_terzaghi = terzaghi_bearing_capacity(c, phi, gamma, B, Df, FS, water_table)
     q_N = bearing_capacity_from_N(N)
     q_CBR = bearing_capacity_from_CBR(predicted["CBR"])
-    if qall_terzaghi:
-        q_allow = qall_terzaghi
-        method = "Terzaghi (c-φ)"
-    elif q_N:
-        q_allow = q_N
-        method = "SPT correlation"
-    else:
-        q_allow = q_CBR
-        method = "CBR correlation"
+    q_allow = qall_terzaghi
     settlement = settlement_from_spt(N, B)
 
 # -------------------------------
@@ -238,6 +223,7 @@ with col1:
     st.subheader("Computed Parameters")
     st.write(f"Plasticity Index (PI): {PI:.2f}" if PI is not None else "PI not available")
     st.success(f"USCS Soil Type: {soil_type}")
+    st.info(f"AASHTO Classification: {aashto_type}")
 
     if predicted:
         st.subheader("Engineering Parameters")
@@ -251,12 +237,11 @@ with col1:
 
         st.subheader("Bearing Capacity")
         st.write(f"Terzaghi q_ult (kPa): {qult:.2f}")
-        st.write(f"Terzaghi q_allow (kPa): {qall_terzaghi:.2f}")
+        st.write(f"Net allowable q_allow (kPa): {qall_terzaghi:.2f}")
         if q_N:
             st.write(f"From SPT N-value (kPa): {q_N:.2f}")
         if q_CBR:
             st.write(f"From CBR (kPa): {q_CBR:.2f}")
-        st.success(f"Adopted q_allow ({method}): {q_allow:.2f}")
 
         st.subheader("Estimated Settlement")
         if settlement:
