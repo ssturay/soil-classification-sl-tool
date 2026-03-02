@@ -19,6 +19,8 @@ PL = st.sidebar.number_input("Plastic Limit (PL)", min_value=0.0, max_value=120.
 
 fines = st.sidebar.number_input("Fines (%)", min_value=0.0, max_value=100.0, value=20.0)
 sand = st.sidebar.number_input("Sand (%)", min_value=0.0, max_value=100.0, value=40.0)
+silt = st.sidebar.number_input("Silt (%)", min_value=0.0, max_value=100.0, value=10.0)
+clay = st.sidebar.number_input("Clay (%)", min_value=0.0, max_value=100.0, value=10.0)
 gravel = st.sidebar.number_input("Gravel (%)", min_value=0.0, max_value=100.0, value=40.0)
 
 # Compute Plasticity Index
@@ -123,7 +125,43 @@ def regional_prediction(region, soil_type):
     }
     return database.get(region, {}).get(soil_type, None)
 
-predicted = regional_prediction(region, soil_type)
+# -------------------------------
+# SHEAR STRENGTH + BEARING CAPACITY
+# -------------------------------
+def regional_prediction_extended(region, soil_type):
+    base = regional_prediction(region, soil_type)
+    if not base:
+        return None
+
+    shear_params = {}
+    if soil_type.startswith("CL"):
+        shear_params["c"] = 35
+        shear_params["phi"] = 22
+    elif soil_type.startswith("CH"):
+        shear_params["c"] = 50
+        shear_params["phi"] = 17
+    elif soil_type.startswith("ML"):
+        shear_params["c"] = 15
+        shear_params["phi"] = 28
+    elif soil_type.startswith("MH"):
+        shear_params["c"] = 20
+        shear_params["phi"] = 25
+    elif soil_type.startswith(("GW","GP","SW","SP")):
+        shear_params["c"] = 5
+        shear_params["phi"] = 35
+    elif soil_type.startswith(("GM","GC")):
+        shear_params["c"] = 20
+        shear_params["phi"] = 30
+    else:
+        shear_params["c"] = 10
+        shear_params["phi"] = 25
+
+    q_allow = 2.5 * base["CBR"]  # kPa, simplified
+
+    extended = {**base, **shear_params, "q_allow": q_allow}
+    return extended
+
+predicted_extended = regional_prediction_extended(region, soil_type)
 
 # -------------------------------
 # PLASTICITY CHART
@@ -135,7 +173,7 @@ def plot_plasticity_chart(LL, PI):
     LL_line = np.linspace(20, 100, 200)
     PI_A = 0.73 * (LL_line - 20)
 
-    # Shaded zones for fine soils
+    # Shaded zones
     LL_cl = np.linspace(20, 50, 200)
     PI_cl = 0.73 * (LL_cl - 20)
     ax.fill_between(LL_cl, PI_cl, 60, alpha=0.4, label="CL")
@@ -155,6 +193,20 @@ def plot_plasticity_chart(LL, PI):
     return fig
 
 # -------------------------------
+# GRAIN SIZE DISTRIBUTION CHART
+# -------------------------------
+def plot_grain_size(silt, clay, sand, gravel):
+    fig, ax = plt.subplots(figsize=(7,5))
+    fractions = ["Gravel", "Sand", "Silt", "Clay"]
+    percentages = [gravel, sand, silt, clay]
+    ax.bar(fractions, percentages, color=['brown','yellow','gray','red'])
+    ax.set_ylim(0,100)
+    ax.set_ylabel("Percentage (%)")
+    ax.set_title("Grain Size Distribution")
+    ax.grid(axis='y', linestyle='--', alpha=0.7)
+    return fig
+
+# -------------------------------
 # DISPLAY OUTPUT
 # -------------------------------
 col1, col2 = st.columns(2)
@@ -164,12 +216,15 @@ with col1:
     st.write(f"Plasticity Index (PI): {PI:.2f}")
     st.success(f"USCS Soil Type: {soil_type}")
 
-    if predicted:
+    if predicted_extended:
         st.subheader("Predicted Engineering Parameters")
-        st.write(f"OMC (%): {predicted['OMC']}")
-        st.write(f"MDD (Mg/m³): {predicted['MDD']}")
-        st.write(f"CBR (%): {predicted['CBR']}")
-        st.write(f"Permeability k (m/s): {predicted['k']:.1e}")
+        st.write(f"OMC (%): {predicted_extended['OMC']}")
+        st.write(f"MDD (Mg/m³): {predicted_extended['MDD']}")
+        st.write(f"CBR (%): {predicted_extended['CBR']}")
+        st.write(f"Permeability k (m/s): {predicted_extended['k']:.1e}")
+        st.write(f"Cohesion c (kPa): {predicted_extended['c']}")
+        st.write(f"Friction angle φ (°): {predicted_extended['phi']}")
+        st.write(f"Allowable bearing capacity q_allow (kPa): {predicted_extended['q_allow']}")
 
 with col2:
     st.subheader("Plasticity Chart")
@@ -178,3 +233,7 @@ with col2:
         st.pyplot(fig)
     else:
         st.info("Plasticity chart not shown for coarse-grained soils (sand/gravel).")
+
+    st.subheader("Grain Size Distribution")
+    fig2 = plot_grain_size(silt, clay, sand, gravel)
+    st.pyplot(fig2)
