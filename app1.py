@@ -1,201 +1,275 @@
 import streamlit as st
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
+import math
 
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", page_title="SL Regional Soil Classification Tool 🇸🇱")
 
-st.title("🇸🇱 Sierra Leone Regional Soil Classification Platform")
+# -------------------------------
+# SIDEBAR INPUTS
+# -------------------------------
+st.sidebar.header("Input Soil Data")
 
-# ==========================================================
-# 1️⃣ REGIONAL DATABASE (ALL REGIONS INCLUDED)
-# ==========================================================
+region = st.sidebar.selectbox(
+    "Select Region",
+    ["North", "South", "East", "West/Freetown"]
+)
 
-REGIONAL_DATABASE = {
+LL = st.sidebar.number_input("Liquid Limit (LL)", 0.0, 120.0, 45.0)
+PL = st.sidebar.number_input("Plastic Limit (PL)", 0.0, 120.0, 25.0)
 
-    "North": {
-        "GW": {"gamma": 20, "phi": 40, "c": 0, "CBR": 40},
-        "GP": {"gamma": 19, "phi": 38, "c": 0, "CBR": 35},
-        "SW": {"gamma": 19, "phi": 36, "c": 0, "CBR": 30},
-        "SP": {"gamma": 18, "phi": 34, "c": 0, "CBR": 25},
-        "SM": {"gamma": 18, "phi": 32, "c": 5, "CBR": 15},
-        "SC": {"gamma": 19, "phi": 30, "c": 10, "CBR": 12},
-        "CL": {"gamma": 18, "phi": 22, "c": 25, "CBR": 6},
-        "CH": {"gamma": 17, "phi": 18, "c": 40, "CBR": 3},
-        "ML": {"gamma": 17, "phi": 26, "c": 8, "CBR": 8},
-        "MH": {"gamma": 16, "phi": 20, "c": 15, "CBR": 4},
-    },
+# -------------------------------
+# Soil Composition: Autofill Fines
+# -------------------------------
+st.sidebar.write("**Soil Composition (%)** (Total = 100%)")
 
-    "South": {
-        "GW": {"gamma": 21, "phi": 41, "c": 0, "CBR": 45},
-        "GP": {"gamma": 20, "phi": 39, "c": 0, "CBR": 38},
-        "SW": {"gamma": 20, "phi": 37, "c": 0, "CBR": 32},
-        "SP": {"gamma": 19, "phi": 35, "c": 0, "CBR": 28},
-        "SM": {"gamma": 18, "phi": 31, "c": 6, "CBR": 18},
-        "SC": {"gamma": 19, "phi": 29, "c": 12, "CBR": 14},
-        "CL": {"gamma": 18, "phi": 23, "c": 28, "CBR": 7},
-        "CH": {"gamma": 17, "phi": 19, "c": 42, "CBR": 4},
-        "ML": {"gamma": 17, "phi": 27, "c": 9, "CBR": 9},
-        "MH": {"gamma": 16, "phi": 21, "c": 18, "CBR": 5},
-    },
+gravel = st.sidebar.number_input("Gravel (%)", 0.0, 100.0, 40.0)
+max_sand = max(0.0, 100.0 - gravel)
+sand = st.sidebar.number_input("Sand (%)", 0.0, max_sand, 40.0)
+fines = 100.0 - (gravel + sand)
+st.sidebar.text(f"Fines (%) auto-calculated: {fines:.2f}")
 
-    "East": {
-        "GW": {"gamma": 20, "phi": 39, "c": 0, "CBR": 42},
-        "GP": {"gamma": 19, "phi": 37, "c": 0, "CBR": 36},
-        "SW": {"gamma": 19, "phi": 35, "c": 0, "CBR": 29},
-        "SP": {"gamma": 18, "phi": 33, "c": 0, "CBR": 24},
-        "SM": {"gamma": 18, "phi": 30, "c": 7, "CBR": 16},
-        "SC": {"gamma": 19, "phi": 28, "c": 11, "CBR": 13},
-        "CL": {"gamma": 18, "phi": 24, "c": 30, "CBR": 8},
-        "CH": {"gamma": 17, "phi": 20, "c": 45, "CBR": 4},
-        "ML": {"gamma": 17, "phi": 25, "c": 10, "CBR": 8},
-        "MH": {"gamma": 16, "phi": 22, "c": 20, "CBR": 5},
-    },
+N = st.sidebar.number_input("SPT N-value (optional)", 0.0, value=0.0)
 
-    "West": {
-        "GW": {"gamma": 21, "phi": 42, "c": 0, "CBR": 48},
-        "GP": {"gamma": 20, "phi": 40, "c": 0, "CBR": 40},
-        "SW": {"gamma": 20, "phi": 38, "c": 0, "CBR": 35},
-        "SP": {"gamma": 19, "phi": 36, "c": 0, "CBR": 30},
-        "SM": {"gamma": 18, "phi": 33, "c": 6, "CBR": 20},
-        "SC": {"gamma": 19, "phi": 31, "c": 12, "CBR": 16},
-        "CL": {"gamma": 18, "phi": 25, "c": 30, "CBR": 8},
-        "CH": {"gamma": 17, "phi": 20, "c": 45, "CBR": 4},
-        "ML": {"gamma": 17, "phi": 27, "c": 10, "CBR": 9},
-        "MH": {"gamma": 16, "phi": 22, "c": 18, "CBR": 5},
+# -------------------------------
+# FOUNDATION INPUTS
+# -------------------------------
+st.sidebar.header("Foundation Parameters")
+B = st.sidebar.number_input("Footing Width B (m)", 0.5, value=1.5)
+Df = st.sidebar.number_input("Foundation Depth Df (m)", 0.5, value=1.0)
+FS = st.sidebar.selectbox("Factor of Safety", [2.5, 3.0, 3.5])
+
+# -------------------------------
+# DERIVED PARAMETERS
+# -------------------------------
+PI = LL - PL if LL and PL else None
+
+# -------------------------------
+# CHART FUNCTIONS
+# -------------------------------
+def plot_grain_size(gravel, sand, fines):
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.bar(["Gravel", "Sand", "Fines"], [gravel, sand, fines])
+    ax.set_ylim(0, 100)
+    ax.set_ylabel("Percentage (%)")
+    ax.set_title("Grain Size Distribution")
+    ax.grid(axis='y', linestyle='--', alpha=0.7)
+    return fig
+
+def plot_plasticity_chart(LL, PI):
+    fig, ax = plt.subplots(figsize=(7, 6))
+    ax.set_xlim(0, 100)
+    ax.set_ylim(0, 60)
+
+    LL_line = np.linspace(20, 100, 200)
+    PI_A = 0.73 * (LL_line - 20)
+
+    LL_cl = np.linspace(20, 50, 200)
+    PI_cl = 0.73 * (LL_cl - 20)
+    ax.fill_between(LL_cl, PI_cl, 60, alpha=0.3, label="CL")
+    ax.fill_between(LL_cl, 0, PI_cl, alpha=0.3, label="ML")
+
+    LL_ch = np.linspace(50, 100, 200)
+    PI_ch = 0.73 * (LL_ch - 20)
+    ax.fill_between(LL_ch, PI_ch, 60, alpha=0.3, label="CH")
+    ax.fill_between(LL_ch, 0, PI_ch, alpha=0.3, label="MH")
+
+    ax.plot(LL_line, PI_A, 'k-', label='A-line')
+
+    if PI is not None:
+        ax.plot(LL, PI, 'ro', markersize=8, label='Sample')
+
+    ax.set_xlabel("Liquid Limit (LL)")
+    ax.set_ylabel("Plasticity Index (PI)")
+    ax.set_title("USCS Plasticity Chart")
+    ax.legend(loc="upper left")
+    ax.grid(True)
+    return fig
+
+# -------------------------------
+# USCS CLASSIFICATION
+# -------------------------------
+def classify_uscs_coarse(sand, gravel, fines):
+    total = sand + gravel
+    if total == 0:
+        return "Undetermined"
+    sand_ratio = sand / total
+    gravel_ratio = gravel / total
+    if fines < 12:
+        return "GP – Poorly-graded gravel" if gravel_ratio > sand_ratio else "SP – Poorly-graded sand"
+    elif 12 <= fines <= 50:
+        return "GM – Silty gravel" if gravel_ratio > sand_ratio else "SM – Silty sand"
+    else:
+        return "GC – Clayey gravel" if gravel_ratio > sand_ratio else "SC – Clayey sand"
+
+def uscs_classification(LL, PI, sand, gravel, fines):
+    if fines >= 50 and PI is not None:
+        A_line = 0.73 * (LL - 20)
+        if LL < 50 and PI >= A_line:
+            return "CL – Lean Clay"
+        elif LL < 50 and PI < A_line:
+            return "ML – Silt"
+        elif LL >= 50 and PI >= A_line:
+            return "CH – Fat Clay"
+        elif LL >= 50 and PI < A_line:
+            return "MH – Elastic Silt"
+    return classify_uscs_coarse(sand, gravel, fines)
+
+soil_type = uscs_classification(LL, PI, sand, gravel, fines)
+
+# -------------------------------
+# REGIONAL DATABASE (North, South, East, West)
+# -------------------------------
+def regional_prediction(region, soil_type):
+    database = {
+        "North": {
+            "CL – Lean Clay": {"OMC":14, "MDD":1.85, "CBR":8, "k":1e-7},
+            "CH – Fat Clay": {"OMC":18, "MDD":1.65, "CBR":3, "k":1e-9},
+            "ML – Silt": {"OMC":12, "MDD":1.90, "CBR":10, "k":1e-6},
+            "MH – Elastic Silt": {"OMC":16, "MDD":1.70, "CBR":5, "k":1e-8},
+            "GP – Poorly-graded gravel": {"OMC":11, "MDD":1.90, "CBR":15, "k":5e-6},
+            "SP – Poorly-graded sand": {"OMC":9, "MDD":1.88, "CBR":12, "k":8e-6},
+            "GM – Silty gravel": {"OMC":14, "MDD":1.85, "CBR":10, "k":1e-7},
+            "GC – Clayey gravel": {"OMC":16, "MDD":1.80, "CBR":8, "k":1e-8},
+            "SM – Silty sand": {"OMC":13, "MDD":1.87, "CBR":11, "k":1e-6},
+            "SC – Clayey sand": {"OMC":15, "MDD":1.82, "CBR":9, "k":1e-7},
+        },
+        "South": {
+            "CL – Lean Clay": {"OMC":16, "MDD":1.80, "CBR":6, "k":1e-8},
+            "CH – Fat Clay": {"OMC":20, "MDD":1.60, "CBR":2, "k":1e-10},
+            "ML – Silt": {"OMC":13, "MDD":1.88, "CBR":9, "k":1e-6},
+            "MH – Elastic Silt": {"OMC":17, "MDD":1.68, "CBR":4, "k":1e-8},
+            "GP – Poorly-graded gravel": {"OMC":12, "MDD":1.90, "CBR":14, "k":5e-6},
+            "SP – Poorly-graded sand": {"OMC":10, "MDD":1.87, "CBR":12, "k":8e-6},
+            "GM – Silty gravel": {"OMC":15, "MDD":1.83, "CBR":9, "k":1e-7},
+            "GC – Clayey gravel": {"OMC":17, "MDD":1.78, "CBR":7, "k":1e-8},
+            "SM – Silty sand": {"OMC":14, "MDD":1.85, "CBR":10, "k":1e-6},
+            "SC – Clayey sand": {"OMC":16, "MDD":1.80, "CBR":8, "k":1e-7},
+        },
+        "East": {
+            "CL – Lean Clay": {"OMC":15, "MDD":1.82, "CBR":7, "k":1e-8},
+            "CH – Fat Clay": {"OMC":19, "MDD":1.62, "CBR":3, "k":1e-9},
+            "ML – Silt": {"OMC":12, "MDD":1.92, "CBR":11, "k":1e-6},
+            "MH – Elastic Silt": {"OMC":16, "MDD":1.72, "CBR":5, "k":1e-8},
+            "GP – Poorly-graded gravel": {"OMC":11, "MDD":1.89, "CBR":14, "k":5e-6},
+            "SP – Poorly-graded sand": {"OMC":9, "MDD":1.88, "CBR":13, "k":8e-6},
+            "GM – Silty gravel": {"OMC":14, "MDD":1.84, "CBR":9, "k":1e-7},
+            "GC – Clayey gravel": {"OMC":16, "MDD":1.79, "CBR":7, "k":1e-8},
+            "SM – Silty sand": {"OMC":13, "MDD":1.86, "CBR":10, "k":1e-6},
+            "SC – Clayey sand": {"OMC":15, "MDD":1.81, "CBR":8, "k":1e-7},
+        },
+        "West/Freetown": {
+            "CL – Lean Clay": {"OMC":17, "MDD":1.78, "CBR":5, "k":1e-8},
+            "CH – Fat Clay": {"OMC":21, "MDD":1.58, "CBR":2, "k":1e-10},
+            "ML – Silt": {"OMC":14, "MDD":1.85, "CBR":8, "k":1e-6},
+            "MH – Elastic Silt": {"OMC":18, "MDD":1.65, "CBR":4, "k":1e-8},
+            "GP – Poorly-graded gravel": {"OMC":12, "MDD":1.88, "CBR":14, "k":5e-6},
+            "SP – Poorly-graded sand": {"OMC":10, "MDD":1.87, "CBR":12, "k":8e-6},
+            "GM – Silty gravel": {"OMC":15, "MDD":1.83, "CBR":9, "k":1e-7},
+            "GC – Clayey gravel": {"OMC":17, "MDD":1.78, "CBR":7, "k":1e-8},
+            "SM – Silty sand": {"OMC":14, "MDD":1.85, "CBR":10, "k":1e-6},
+            "SC – Clayey sand": {"OMC":16, "MDD":1.80, "CBR":8, "k":1e-7},
+        }
     }
-}
+    return database.get(region, {}).get(soil_type, None)
 
-# ==========================================================
-# 2️⃣ INPUT SECTION
-# ==========================================================
+# -------------------------------
+# SHEAR PARAMETERS
+# -------------------------------
+def shear_parameters(soil_type):
+    if soil_type.startswith("CL"): return 35, 22
+    if soil_type.startswith("CH"): return 50, 17
+    if soil_type.startswith("ML"): return 15, 28
+    if soil_type.startswith("MH"): return 20, 25
+    if soil_type.startswith(("GP", "SP")): return 5, 35
+    if soil_type.startswith(("GM", "SM", "SC", "GC")): return 20, 30
+    return 10, 25
 
-region = st.selectbox("Select Region", ["North", "South", "East", "West"])
+# -------------------------------
+# BEARING CAPACITY FUNCTIONS
+# -------------------------------
+def bearing_capacity_from_N(N):
+    return 12 * N if N > 0 else None
 
+def bearing_capacity_from_CBR(CBR):
+    return 2.5 * CBR if CBR else None
+
+def terzaghi_bearing_capacity(c, phi, gamma, B, Df, FS):
+    phi_rad = math.radians(phi)
+    Nq = math.exp(math.pi * math.tan(phi_rad)) * (math.tan(math.radians(45 + phi/2)) ** 2)
+    Nc = (Nq - 1) / math.tan(phi_rad) if phi > 0 else 5.7
+    Ngamma = 2 * (Nq + 1) * math.tan(phi_rad)
+    q = gamma * Df
+    qult = c * Nc + q * Nq + 0.5 * gamma * B * Ngamma
+    qall = qult / FS
+    return qult, qall
+
+def settlement_from_spt(N, B):
+    return (25 * B) / N if N > 0 else None
+
+# -------------------------------
+# COMPUTE RESULTS
+# -------------------------------
+predicted = regional_prediction(region, soil_type)
+
+if predicted:
+    c, phi = shear_parameters(soil_type)
+    gamma = predicted["MDD"] * 9.81
+    qult, qall_terzaghi = terzaghi_bearing_capacity(c, phi, gamma, B, Df, FS)
+    q_N = bearing_capacity_from_N(N)
+    q_CBR = bearing_capacity_from_CBR(predicted["CBR"])
+    if qall_terzaghi:
+        q_allow = qall_terzaghi
+        method = "Terzaghi (c-φ)"
+    elif q_N:
+        q_allow = q_N
+        method = "SPT correlation"
+    else:
+        q_allow = q_CBR
+        method = "CBR correlation"
+    settlement = settlement_from_spt(N, B)
+
+# -------------------------------
+# DISPLAY
+# -------------------------------
 col1, col2 = st.columns(2)
 
 with col1:
-    sand = st.number_input("Sand (%)", 0.0, 100.0, 40.0)
-    gravel_max = 100.0 - sand
-    gravel = st.number_input("Gravel (%)", 0.0, gravel_max, 30.0)
+    st.subheader("Computed Parameters")
+    st.write(f"Plasticity Index (PI): {PI:.2f}" if PI is not None else "PI not available")
+    st.success(f"USCS Soil Type: {soil_type}")
+
+    if predicted:
+        st.subheader("Engineering Parameters")
+        st.write(f"OMC (%): {predicted['OMC']}")
+        st.write(f"MDD (Mg/m³): {predicted['MDD']}")
+        st.write(f"CBR (%): {predicted['CBR']}")
+        st.write(f"Permeability k (m/s): {predicted['k']:.1e}")
+        st.write(f"Cohesion c (kPa): {c}")
+        st.write(f"Friction angle φ (°): {phi}")
+        st.write(f"Unit weight γ (kN/m³): {gamma:.2f}")
+
+        st.subheader("Bearing Capacity")
+        st.write(f"Terzaghi q_ult (kPa): {qult:.2f}")
+        st.write(f"Terzaghi q_allow (kPa): {qall_terzaghi:.2f}")
+        if q_N:
+            st.write(f"From SPT N-value (kPa): {q_N:.2f}")
+        if q_CBR:
+            st.write(f"From CBR (kPa): {q_CBR:.2f}")
+        st.success(f"Adopted q_allow ({method}): {q_allow:.2f}")
+
+        st.subheader("Estimated Settlement")
+        if settlement:
+            st.write(f"Settlement ≈ {settlement:.2f} mm")
+        else:
+            st.write("Settlement requires SPT N-value")
 
 with col2:
-    fines = 100 - (sand + gravel)
-    st.number_input("Fines (%)", value=fines, disabled=True)
-
-LL = st.number_input("Liquid Limit (LL)", 0.0, 150.0, 40.0)
-PI = st.number_input("Plasticity Index (PI)", 0.0, 100.0, 15.0)
-N = st.number_input("SPT N-value (optional)", 0.0, 100.0, 0.0)
-CBR_input = st.number_input("CBR % (optional)", 0.0, 100.0, 0.0)
-water_table = st.checkbox("Groundwater within foundation depth?")
-
-# ==========================================================
-# 3️⃣ USCS CLASSIFICATION
-# ==========================================================
-
-def classify_uscs(gravel, sand, fines, LL, PI):
-    if fines < 5:
-        if gravel > sand:
-            return "GW" if PI < 4 else "GP"
-        else:
-            return "SW" if PI < 4 else "SP"
-    elif fines > 12:
-        if LL < 50:
-            return "CL" if PI > 7 else "ML"
-        else:
-            return "CH" if PI > 7 else "MH"
+    st.subheader("Plasticity Chart")
+    if fines >= 50 and PI is not None:
+        st.pyplot(plot_plasticity_chart(LL, PI))
     else:
-        return "SM"
+        st.info("Plasticity chart only for fine-grained soils with PI.")
 
-uscs = classify_uscs(gravel, sand, fines, LL, PI)
-st.subheader(f"USCS Classification: {uscs}")
-
-# ==========================================================
-# 4️⃣ AASHTO CLASSIFICATION
-# ==========================================================
-
-def classify_aashto(fines, LL, PI):
-    if fines < 35:
-        return "A-1"
-    elif LL < 40 and PI < 10:
-        return "A-2-4"
-    elif LL < 40 and PI >= 10:
-        return "A-2-6"
-    elif LL >= 40 and PI <= 10:
-        return "A-4"
-    else:
-        return "A-7"
-
-aashto = classify_aashto(fines, LL, PI)
-st.subheader(f"AASHTO Classification: {aashto}")
-
-# ==========================================================
-# 5️⃣ ENGINEERING PARAMETERS
-# ==========================================================
-
-params = REGIONAL_DATABASE[region][uscs]
-gamma = params["gamma"]
-phi = params["phi"]
-c = params["c"]
-CBR_default = params["CBR"]
-
-st.write("### Predicted Engineering Parameters")
-st.write(f"Unit Weight γ = {gamma} kN/m³")
-st.write(f"Friction Angle φ = {phi}°")
-st.write(f"Cohesion c = {c} kPa")
-
-# ==========================================================
-# 6️⃣ BEARING CAPACITY
-# ==========================================================
-
-def bearing_from_spt(N):
-    return 12 * N
-
-def bearing_from_cbr(CBR):
-    return 10 * CBR
-
-qa_spt = bearing_from_spt(N) if N > 0 else None
-qa_cbr = bearing_from_cbr(CBR_input if CBR_input > 0 else CBR_default)
-
-if qa_spt:
-    st.write(f"Allowable Bearing Capacity (SPT) = {qa_spt:.2f} kPa")
-
-if qa_cbr:
-    st.write(f"Allowable Bearing Capacity (CBR) = {qa_cbr:.2f} kPa")
-
-qa = qa_spt if qa_spt else qa_cbr
-
-if qa:
-    gamma_eff = gamma - 9.81 if water_table else gamma
-    if water_table:
-        st.write("Groundwater correction applied.")
-
-    net_qa = qa - gamma_eff
-    st.write(f"Net Allowable Bearing Capacity = {net_qa:.2f} kPa")
-
-# ==========================================================
-# 7️⃣ PLASTICITY CHART
-# ==========================================================
-
-def plot_plasticity(LL, PI):
-    fig, ax = plt.subplots()
-    LL_line = np.linspace(0,100,100)
-    A_line = 0.73*(LL_line-20)
-    ax.plot(LL_line, A_line)
-    ax.scatter(LL, PI)
-    ax.set_xlabel("LL")
-    ax.set_ylabel("PI")
-    return fig
-
-st.pyplot(plot_plasticity(LL, PI))
-
-# ==========================================================
-# 8️⃣ GRAIN SIZE TRIANGLE
-# ==========================================================
-
-def plot_grain(gravel, sand, fines):
-    fig, ax = plt.subplots()
-    ax.bar(["Gravel","Sand","Fines"],[gravel,sand,fines])
-    return fig
-
-st.pyplot(plot_grain(gravel, sand, fines))
+    st.subheader("Grain Size Distribution")
+    st.pyplot(plot_grain_size(gravel, sand, fines))
