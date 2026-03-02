@@ -21,6 +21,9 @@ gravel = st.sidebar.number_input("Gravel (%)", min_value=0.0, max_value=100.0, v
 sand = st.sidebar.number_input("Sand (%)", min_value=0.0, max_value=100.0, value=40.0)
 fines = st.sidebar.number_input("Fines (%)", min_value=0.0, max_value=100.0, value=20.0)
 
+# NEW: SPT input
+N = st.sidebar.number_input("SPT N-value (optional)", min_value=0.0, max_value=60.0, value=0.0)
+
 # Compute Plasticity Index
 PI = LL - PL if LL and PL else None
 
@@ -49,7 +52,6 @@ def classify_uscs_coarse(sand, gravel, fines):
 
 def uscs_classification(LL, PI, sand, gravel, fines):
     if fines >= 50:
-        # Fine-grained
         A_line = 0.73 * (LL - 20)
         if LL < 50 and PI >= A_line:
             return "CL – Lean Clay"
@@ -60,16 +62,14 @@ def uscs_classification(LL, PI, sand, gravel, fines):
         elif LL >= 50 and PI < A_line:
             return "MH – Elastic Silt"
     else:
-        # Coarse-grained
         return classify_uscs_coarse(sand, gravel, fines)
 
 soil_type = uscs_classification(LL, PI, sand, gravel, fines)
 
 # -------------------------------
-# REGIONAL ENGINEERING PREDICTION
+# REGIONAL ENGINEERING DATABASE (UNCHANGED)
 # -------------------------------
 def regional_prediction(region, soil_type):
-    # same database as before
     database = {
         "North": {
             "CL – Lean Clay": {"OMC":14, "MDD":1.85, "CBR":8, "k":1e-7},
@@ -123,94 +123,76 @@ def regional_prediction(region, soil_type):
     return database.get(region, {}).get(soil_type, None)
 
 # -------------------------------
-# SHEAR STRENGTH + BEARING CAPACITY
+# EXTENDED ENGINEERING LOGIC
 # -------------------------------
-def regional_prediction_extended(region, soil_type):
+def regional_prediction_extended(region, soil_type, N):
     base = regional_prediction(region, soil_type)
     if not base:
         return None
 
-    shear_params = {}
+    # Default regional shear strength
     if soil_type.startswith("CL"):
-        shear_params["c"] = 35
-        shear_params["phi"] = 22
+        c, phi = 35, 22
     elif soil_type.startswith("CH"):
-        shear_params["c"] = 50
-        shear_params["phi"] = 17
+        c, phi = 50, 17
     elif soil_type.startswith("ML"):
-        shear_params["c"] = 15
-        shear_params["phi"] = 28
+        c, phi = 15, 28
     elif soil_type.startswith("MH"):
-        shear_params["c"] = 20
-        shear_params["phi"] = 25
+        c, phi = 20, 25
     elif soil_type.startswith(("GW","GP","SW","SP")):
-        shear_params["c"] = 5
-        shear_params["phi"] = 35
+        c, phi = 5, 35
     elif soil_type.startswith(("GM","GC")):
-        shear_params["c"] = 20
-        shear_params["phi"] = 30
+        c, phi = 20, 30
     else:
-        shear_params["c"] = 10
-        shear_params["phi"] = 25
+        c, phi = 10, 25
 
-    q_allow = 2.5 * base["CBR"]  # kPa, simplified
+    # 🔹 Override with SPT if available
+    if N > 0:
+        if soil_type.startswith(("GW","GP","SW","SP")):
+            phi = 27 + 0.3 * N
+            c = 0
+        elif soil_type.startswith(("GM","GC")):
+            phi = 30
+            c = 10 + 0.5 * N
+        else:
+            phi = 20
+            c = 5 * N
 
-    extended = {**base, **shear_params, "q_allow": q_allow}
+    # 🔹 Bearing capacity from CBR (regional)
+    qa_cbr = 30 * base["CBR"]
 
-    # FOUNDATION RECOMMENDATION
-    if extended["q_allow"] > 20:
-        extended["foundation"] = "Suitable for shallow foundation"
-    else:
-        extended["foundation"] = "Consider deep foundation"
+    # 🔹 Bearing capacity from SPT
+    qa_spt = None
+    if N > 0:
+        if soil_type.startswith(("GW","GP","SW","SP")):
+            qa_spt = 12 * N
+        elif soil_type.startswith(("GM","GC")):
+            qa_spt = 10 * N
+        else:
+            qa_spt = 6 * N
 
-    return extended
+    # 🔹 Controlling allowable bearing capacity
+    qa_values = [q for q in [qa_cbr, qa_spt] if q is not None]
+    qa_final = min(qa_values) if qa_values else qa_cbr
 
-predicted_extended = regional_prediction_extended(region, soil_type)
+    foundation = "Suitable for shallow foundation" if qa_final > 150 else \
+                 "Shallow foundation with improvement" if qa_final > 100 else \
+                 "Consider deep foundation"
 
-# -------------------------------
-# PLASTICITY CHART
-# -------------------------------
-def plot_plasticity_chart(LL, PI):
-    fig, ax = plt.subplots(figsize=(7,6))
-    ax.set_xlim(0, 100)
-    ax.set_ylim(0, 60)
-    LL_line = np.linspace(20, 100, 200)
-    PI_A = 0.73 * (LL_line - 20)
+    return {
+        **base,
+        "c": round(c,1),
+        "phi": round(phi,1),
+        "qa_cbr": round(qa_cbr,1),
+        "qa_spt": round(qa_spt,1) if qa_spt else None,
+        "q_allow": round(qa_final,1),
+        "foundation": foundation
+    }
 
-    LL_cl = np.linspace(20, 50, 200)
-    PI_cl = 0.73 * (LL_cl - 20)
-    ax.fill_between(LL_cl, PI_cl, 60, alpha=0.4, label="CL")
-    ax.fill_between(LL_cl, 0, PI_cl, alpha=0.4, label="ML")
-    LL_ch = np.linspace(50, 100, 200)
-    PI_ch = 0.73 * (LL_ch - 20)
-    ax.fill_between(LL_ch, PI_ch, 60, alpha=0.4, label="CH")
-    ax.fill_between(LL_ch, 0, PI_ch, alpha=0.4, label="MH")
-
-    ax.plot(LL_line, PI_A, 'k-', label='A-line')
-    ax.plot(LL, PI, 'ro', markersize=8, label='Sample')
-    ax.set_xlabel("Liquid Limit (LL)")
-    ax.set_ylabel("Plasticity Index (PI)")
-    ax.set_title("USCS Plasticity Chart")
-    ax.legend(loc="upper left")
-    ax.grid(True)
-    return fig
-
-# -------------------------------
-# GRAIN SIZE DISTRIBUTION CHART (Gravel, Sand, Fines)
-# -------------------------------
-def plot_grain_size(gravel, sand, fines):
-    fig, ax = plt.subplots(figsize=(7,5))
-    fractions = ["Gravel", "Sand", "Fines"]
-    percentages = [gravel, sand, fines]
-    ax.bar(fractions, percentages, color=['brown','yellow','gray'])
-    ax.set_ylim(0,100)
-    ax.set_ylabel("Percentage (%)")
-    ax.set_title("Grain Size Distribution")
-    ax.grid(axis='y', linestyle='--', alpha=0.7)
-    return fig
+predicted_extended = regional_prediction_extended(region, soil_type, N)
 
 # -------------------------------
-# DISPLAY OUTPUT
+# DISPLAY OUTPUT (UNCHANGED LAYOUT)
 # -------------------------------
 col1, col2 = st.columns(2)
 
@@ -227,7 +209,10 @@ with col1:
         st.write(f"Permeability k (m/s): {predicted_extended['k']:.1e}")
         st.write(f"Cohesion c (kPa): {predicted_extended['c']}")
         st.write(f"Friction angle φ (°): {predicted_extended['phi']}")
-        st.write(f"Allowable bearing capacity q_allow (kPa): {predicted_extended['q_allow']}")
+        st.write(f"q_allow from CBR (kPa): {predicted_extended['qa_cbr']}")
+        if predicted_extended["qa_spt"]:
+            st.write(f"q_allow from SPT (kPa): {predicted_extended['qa_spt']}")
+        st.write(f"Controlling q_allow (kPa): {predicted_extended['q_allow']}")
         st.write(f"Foundation Recommendation: {predicted_extended['foundation']}")
 
 with col2:
