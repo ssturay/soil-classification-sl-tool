@@ -19,11 +19,9 @@ PL = st.sidebar.number_input("Plastic Limit (PL)", min_value=0.0, max_value=120.
 
 gravel = st.sidebar.number_input("Gravel (%)", min_value=0.0, max_value=100.0, value=40.0)
 sand = st.sidebar.number_input("Sand (%)", min_value=0.0, max_value=100.0, value=40.0)
-silt = st.sidebar.number_input("Silt (%)", min_value=0.0, max_value=100.0, value=10.0)
-clay = st.sidebar.number_input("Clay (%)", min_value=0.0, max_value=100.0, value=10.0)
+fines = st.sidebar.number_input("Fines (%)", min_value=0.0, max_value=100.0, value=20.0)
 
-# Compute fines
-fines = silt + clay
+# Compute Plasticity Index
 PI = LL - PL if LL and PL else None
 
 # -------------------------------
@@ -71,6 +69,7 @@ soil_type = uscs_classification(LL, PI, sand, gravel, fines)
 # REGIONAL ENGINEERING PREDICTION
 # -------------------------------
 def regional_prediction(region, soil_type):
+    # same database as before
     database = {
         "North": {
             "CL – Lean Clay": {"OMC":14, "MDD":1.85, "CBR":8, "k":1e-7},
