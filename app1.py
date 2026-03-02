@@ -19,20 +19,15 @@ LL = st.sidebar.number_input("Liquid Limit (LL)", 0.0, 120.0, 45.0)
 PL = st.sidebar.number_input("Plastic Limit (PL)", 0.0, 120.0, 25.0)
 
 # -------------------------------
-# Sand/Gravel/Fines with total restriction
+# Soil Composition: Autofill Fines
 # -------------------------------
-st.sidebar.write("**Soil Composition (%)** (total ≤ 100%)")
+st.sidebar.write("**Soil Composition (%)** (Total = 100%)")
 
-# Helper function to constrain percentages
-def constrained_input(label, max_value, default, total_used):
-    value = st.sidebar.number_input(label, 0.0, max_value, default)
-    if value + total_used > 100.0:
-        value = max(0.0, 100.0 - total_used)
-    return value
-
-gravel = constrained_input("Gravel (%)", 100.0, 40.0, 0)
-sand = constrained_input("Sand (%)", 100.0, 40.0, gravel)
-fines = constrained_input("Fines (%)", 100.0, 20.0, gravel + sand)
+gravel = st.sidebar.number_input("Gravel (%)", 0.0, 100.0, 40.0)
+max_sand = max(0.0, 100.0 - gravel)
+sand = st.sidebar.number_input("Sand (%)", 0.0, max_sand, 40.0)
+fines = 100.0 - (gravel + sand)
+st.sidebar.text(f"Fines (%) auto-calculated: {fines:.2f}")
 
 N = st.sidebar.number_input("SPT N-value (optional)", 0.0, value=0.0)
 
