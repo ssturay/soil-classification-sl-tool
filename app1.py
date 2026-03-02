@@ -17,21 +17,19 @@ region = st.sidebar.selectbox(
 LL = st.sidebar.number_input("Liquid Limit (LL)", min_value=0.0, max_value=120.0, value=45.0)
 PL = st.sidebar.number_input("Plastic Limit (PL)", min_value=0.0, max_value=120.0, value=25.0)
 
-fines = st.sidebar.number_input("Fines (%)", min_value=0.0, max_value=100.0, value=20.0)
+gravel = st.sidebar.number_input("Gravel (%)", min_value=0.0, max_value=100.0, value=40.0)
 sand = st.sidebar.number_input("Sand (%)", min_value=0.0, max_value=100.0, value=40.0)
 silt = st.sidebar.number_input("Silt (%)", min_value=0.0, max_value=100.0, value=10.0)
 clay = st.sidebar.number_input("Clay (%)", min_value=0.0, max_value=100.0, value=10.0)
-gravel = st.sidebar.number_input("Gravel (%)", min_value=0.0, max_value=100.0, value=40.0)
 
-# Compute Plasticity Index
+# Compute fines
+fines = silt + clay
 PI = LL - PL if LL and PL else None
 
 # -------------------------------
 # USCS CLASSIFICATION FUNCTIONS
 # -------------------------------
 def classify_uscs_coarse(sand, gravel, fines):
-    if sand is None or gravel is None or fines is None:
-        return "Undetermined"
     total = sand + gravel
     if total == 0:
         return "Undetermined"
@@ -159,6 +157,13 @@ def regional_prediction_extended(region, soil_type):
     q_allow = 2.5 * base["CBR"]  # kPa, simplified
 
     extended = {**base, **shear_params, "q_allow": q_allow}
+
+    # FOUNDATION RECOMMENDATION
+    if extended["q_allow"] > 20:
+        extended["foundation"] = "Suitable for shallow foundation"
+    else:
+        extended["foundation"] = "Consider deep foundation"
+
     return extended
 
 predicted_extended = regional_prediction_extended(region, soil_type)
@@ -173,7 +178,6 @@ def plot_plasticity_chart(LL, PI):
     LL_line = np.linspace(20, 100, 200)
     PI_A = 0.73 * (LL_line - 20)
 
-    # Shaded zones
     LL_cl = np.linspace(20, 50, 200)
     PI_cl = 0.73 * (LL_cl - 20)
     ax.fill_between(LL_cl, PI_cl, 60, alpha=0.4, label="CL")
@@ -193,13 +197,13 @@ def plot_plasticity_chart(LL, PI):
     return fig
 
 # -------------------------------
-# GRAIN SIZE DISTRIBUTION CHART
+# GRAIN SIZE DISTRIBUTION CHART (Gravel, Sand, Fines)
 # -------------------------------
-def plot_grain_size(silt, clay, sand, gravel):
+def plot_grain_size(gravel, sand, fines):
     fig, ax = plt.subplots(figsize=(7,5))
-    fractions = ["Gravel", "Sand", "Silt", "Clay"]
-    percentages = [gravel, sand, silt, clay]
-    ax.bar(fractions, percentages, color=['brown','yellow','gray','red'])
+    fractions = ["Gravel", "Sand", "Fines"]
+    percentages = [gravel, sand, fines]
+    ax.bar(fractions, percentages, color=['brown','yellow','gray'])
     ax.set_ylim(0,100)
     ax.set_ylabel("Percentage (%)")
     ax.set_title("Grain Size Distribution")
@@ -225,6 +229,7 @@ with col1:
         st.write(f"Cohesion c (kPa): {predicted_extended['c']}")
         st.write(f"Friction angle φ (°): {predicted_extended['phi']}")
         st.write(f"Allowable bearing capacity q_allow (kPa): {predicted_extended['q_allow']}")
+        st.write(f"Foundation Recommendation: {predicted_extended['foundation']}")
 
 with col2:
     st.subheader("Plasticity Chart")
@@ -235,5 +240,5 @@ with col2:
         st.info("Plasticity chart not shown for coarse-grained soils (sand/gravel).")
 
     st.subheader("Grain Size Distribution")
-    fig2 = plot_grain_size(silt, clay, sand, gravel)
+    fig2 = plot_grain_size(gravel, sand, fines)
     st.pyplot(fig2)
