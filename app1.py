@@ -76,13 +76,11 @@ col1, col2 = st.columns(2)
 
 with col1:
     sand = st.number_input("Sand (%)", 0.0, 100.0, 40.0)
-    gravel = st.number_input("Gravel (%)", 0.0, 100.0, 30.0)
+    gravel_max = 100.0 - sand
+    gravel = st.number_input("Gravel (%)", 0.0, gravel_max, 30.0)
 
 with col2:
     fines = 100 - (sand + gravel)
-    if fines < 0:
-        st.error("Sand + Gravel cannot exceed 100%")
-        fines = 0
     st.number_input("Fines (%)", value=fines, disabled=True)
 
 LL = st.number_input("Liquid Limit (LL)", 0.0, 150.0, 40.0)
@@ -157,7 +155,7 @@ def bearing_from_cbr(CBR):
     return 10 * CBR
 
 qa_spt = bearing_from_spt(N) if N > 0 else None
-qa_cbr = bearing_from_cbr(CBR_input) if CBR_input > 0 else None
+qa_cbr = bearing_from_cbr(CBR_input if CBR_input > 0 else CBR_default)
 
 if qa_spt:
     st.write(f"Allowable Bearing Capacity (SPT) = {qa_spt:.2f} kPa")
@@ -168,11 +166,9 @@ if qa_cbr:
 qa = qa_spt if qa_spt else qa_cbr
 
 if qa:
+    gamma_eff = gamma - 9.81 if water_table else gamma
     if water_table:
-        gamma_eff = gamma - 9.81
         st.write("Groundwater correction applied.")
-    else:
-        gamma_eff = gamma
 
     net_qa = qa - gamma_eff
     st.write(f"Net Allowable Bearing Capacity = {net_qa:.2f} kPa")
