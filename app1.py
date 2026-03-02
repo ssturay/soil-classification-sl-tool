@@ -18,13 +18,27 @@ region = st.sidebar.selectbox(
 LL = st.sidebar.number_input("Liquid Limit (LL)", 0.0, 120.0, 45.0)
 PL = st.sidebar.number_input("Plastic Limit (PL)", 0.0, 120.0, 25.0)
 
-gravel = st.sidebar.number_input("Gravel (%)", 0.0, 100.0, 40.0)
-sand = st.sidebar.number_input("Sand (%)", 0.0, 100.0, 40.0)
-fines = st.sidebar.number_input("Fines (%)", 0.0, 100.0, 20.0)
+# -------------------------------
+# Sand/Gravel/Fines with total restriction
+# -------------------------------
+st.sidebar.write("**Soil Composition (%)** (total ≤ 100%)")
+
+# Helper function to constrain percentages
+def constrained_input(label, max_value, default, total_used):
+    value = st.sidebar.number_input(label, 0.0, max_value, default)
+    if value + total_used > 100.0:
+        value = max(0.0, 100.0 - total_used)
+    return value
+
+gravel = constrained_input("Gravel (%)", 100.0, 40.0, 0)
+sand = constrained_input("Sand (%)", 100.0, 40.0, gravel)
+fines = constrained_input("Fines (%)", 100.0, 20.0, gravel + sand)
 
 N = st.sidebar.number_input("SPT N-value (optional)", 0.0, value=0.0)
 
-# NEW: FOUNDATION INPUTS
+# -------------------------------
+# FOUNDATION INPUTS
+# -------------------------------
 st.sidebar.header("Foundation Parameters")
 B = st.sidebar.number_input("Footing Width B (m)", 0.5, value=1.5)
 Df = st.sidebar.number_input("Foundation Depth Df (m)", 0.5, value=1.0)
@@ -84,10 +98,8 @@ def classify_uscs_coarse(sand, gravel, fines):
     total = sand + gravel
     if total == 0:
         return "Undetermined"
-
     sand_ratio = sand / total
     gravel_ratio = gravel / total
-
     if fines < 12:
         return "GP – Poorly-graded gravel" if gravel_ratio > sand_ratio else "SP – Poorly-graded sand"
     elif 12 <= fines <= 50:
@@ -98,7 +110,6 @@ def classify_uscs_coarse(sand, gravel, fines):
 def uscs_classification(LL, PI, sand, gravel, fines):
     if fines >= 50 and PI is not None:
         A_line = 0.73 * (LL - 20)
-
         if LL < 50 and PI >= A_line:
             return "CL – Lean Clay"
         elif LL < 50 and PI < A_line:
@@ -107,13 +118,12 @@ def uscs_classification(LL, PI, sand, gravel, fines):
             return "CH – Fat Clay"
         elif LL >= 50 and PI < A_line:
             return "MH – Elastic Silt"
-
     return classify_uscs_coarse(sand, gravel, fines)
 
 soil_type = uscs_classification(LL, PI, sand, gravel, fines)
 
 # -------------------------------
-# REGIONAL DATABASE (Updated with South and East)
+# REGIONAL DATABASE (North, South, East, West)
 # -------------------------------
 def regional_prediction(region, soil_type):
     database = {
@@ -191,15 +201,12 @@ def bearing_capacity_from_CBR(CBR):
 
 def terzaghi_bearing_capacity(c, phi, gamma, B, Df, FS):
     phi_rad = math.radians(phi)
-
     Nq = math.exp(math.pi * math.tan(phi_rad)) * (math.tan(math.radians(45 + phi/2)) ** 2)
     Nc = (Nq - 1) / math.tan(phi_rad) if phi > 0 else 5.7
     Ngamma = 2 * (Nq + 1) * math.tan(phi_rad)
-
     q = gamma * Df
     qult = c * Nc + q * Nq + 0.5 * gamma * B * Ngamma
     qall = qult / FS
-
     return qult, qall
 
 def settlement_from_spt(N, B):
@@ -213,12 +220,9 @@ predicted = regional_prediction(region, soil_type)
 if predicted:
     c, phi = shear_parameters(soil_type)
     gamma = predicted["MDD"] * 9.81
-
     qult, qall_terzaghi = terzaghi_bearing_capacity(c, phi, gamma, B, Df, FS)
-
     q_N = bearing_capacity_from_N(N)
     q_CBR = bearing_capacity_from_CBR(predicted["CBR"])
-
     if qall_terzaghi:
         q_allow = qall_terzaghi
         method = "Terzaghi (c-φ)"
@@ -228,7 +232,6 @@ if predicted:
     else:
         q_allow = q_CBR
         method = "CBR correlation"
-
     settlement = settlement_from_spt(N, B)
 
 # -------------------------------
