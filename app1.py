@@ -237,7 +237,7 @@ predicted = regional_prediction(region, lookup_key)
 # -------------------------------
 # DISPLAY RESULTS
 # -------------------------------
-st.title("Soil Classification Results")
+st.title("SL Regional Soil Classification Tool 🇸🇱")
 
 col1, col2 = st.columns(2)
 
