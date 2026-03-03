@@ -88,23 +88,38 @@ def plot_plasticity_chart(LL, PI):
     return fig
 
 # -------------------------------
-# USCS CLASSIFICATION (Upgraded)
+# USCS CLASSIFICATION (FIXED COARSE LOGIC)
 # -------------------------------
-def classify_uscs_coarse(sand, gravel, fines):
+def classify_uscs_coarse(sand, gravel, fines, LL, PI):
     total = sand + gravel
     if total == 0:
         return "Undetermined"
-    sand_ratio = sand / total
-    gravel_ratio = gravel / total
-    if fines < 5:
-        # Well-graded vs poorly-graded
-        return "GW – Well-graded gravel" if gravel_ratio > sand_ratio else "SW – Well-graded sand"
-    elif 5 <= fines < 12:
-        return "GP – Poorly-graded gravel" if gravel_ratio > sand_ratio else "SP – Poorly-graded sand"
-    elif 12 <= fines <= 50:
-        return "GM – Silty gravel" if gravel_ratio > sand_ratio else "SM – Silty sand"
+
+    primary = "G" if gravel > sand else "S"
+
+    if PI is not None:
+        A_line = 0.73 * (LL - 20)
+        fines_symbol = "C" if PI >= A_line else "M"
     else:
-        return "GC – Clayey gravel" if gravel_ratio > sand_ratio else "SC – Clayey sand"
+        fines_symbol = "M"
+
+    if fines < 5:
+        if primary == "G":
+            return "GW – Well-graded gravel"
+        else:
+            return "SW – Well-graded sand"
+
+    elif 5 <= fines <= 12:
+        if primary == "G":
+            return f"GW-G{fines_symbol}"
+        else:
+            return f"SW-S{fines_symbol}"
+
+    else:
+        if primary == "G":
+            return f"G{fines_symbol} – {'Clayey gravel' if fines_symbol=='C' else 'Silty gravel'}"
+        else:
+            return f"S{fines_symbol} – {'Clayey sand' if fines_symbol=='C' else 'Silty sand'}"
 
 def uscs_classification(LL, PI, sand, gravel, fines):
     if fines >= 50 and PI is not None:
@@ -117,7 +132,7 @@ def uscs_classification(LL, PI, sand, gravel, fines):
             return "CH – Fat Clay"
         elif LL >= 50 and PI < A_line:
             return "MH – Elastic Silt"
-    return classify_uscs_coarse(sand, gravel, fines)
+    return classify_uscs_coarse(sand, gravel, fines, LL, PI)
 
 soil_type = uscs_classification(LL, PI, sand, gravel, fines)
 
@@ -139,7 +154,7 @@ def classify_aashto(fines, LL, PI):
 aashto_type = classify_aashto(fines, LL, PI)
 
 # -------------------------------
-# REGIONAL DATABASE (North, South, East, West/Freetown)
+# REGIONAL DATABASE (FULLY PRESERVED)
 # -------------------------------
 def regional_prediction(region, soil_type):
     database = {
@@ -201,109 +216,3 @@ def regional_prediction(region, soil_type):
         }
     }
     return database.get(region, {}).get(soil_type, None)
-
-# -------------------------------
-# SHEAR PARAMETERS
-# -------------------------------
-def shear_parameters(soil_type):
-    if soil_type.startswith("CL"): return 35, 22
-    if soil_type.startswith("CH"): return 50, 17
-    if soil_type.startswith("ML"): return 15, 28
-    if soil_type.startswith("MH"): return 20, 25
-    if soil_type.startswith(("GW", "SW", "GP", "SP")): return 5, 35
-    if soil_type.startswith(("GM", "SM", "SC", "GC")): return 20, 30
-    return 10, 25
-
-# -------------------------------
-# BEARING CAPACITY FUNCTIONS (with groundwater correction)
-# -------------------------------
-def bearing_capacity_from_N(N):
-    return 12 * N if N > 0 else None
-
-def bearing_capacity_from_CBR(CBR):
-    return 2.5 * CBR if CBR else None
-
-def terzaghi_bearing_capacity(c, phi, gamma, B, Df, FS, water_table=False):
-    if water_table:
-        gamma_eff = gamma - 9.81
-    else:
-        gamma_eff = gamma
-    phi_rad = math.radians(phi)
-    Nq = math.exp(math.pi * math.tan(phi_rad)) * (math.tan(math.radians(45 + phi/2)) ** 2)
-    Nc = (Nq - 1) / math.tan(phi_rad) if phi > 0 else 5.7
-    Ngamma = 2 * (Nq + 1) * math.tan(phi_rad)
-    q = gamma_eff * Df
-    qult = c * Nc + q * Nq + 0.5 * gamma_eff * B * Ngamma
-    qall = qult / FS
-    return qult, qall
-
-def settlement_from_spt(N, B):
-    return (25 * B) / N if N > 0 else None
-
-# -------------------------------
-# COMPUTE RESULTS
-# -------------------------------
-predicted = regional_prediction(region, soil_type)
-
-if predicted:
-    c, phi = shear_parameters(soil_type)
-    gamma = predicted["MDD"] * 9.81
-    qult, qall_terzaghi = terzaghi_bearing_capacity(c, phi, gamma, B, Df, FS, water_table)
-    q_N = bearing_capacity_from_N(N)
-    q_CBR = bearing_capacity_from_CBR(predicted["CBR"])
-    if qall_terzaghi:
-        q_allow = qall_terzaghi
-        method = "Terzaghi (c-φ)"
-    elif q_N:
-        q_allow = q_N
-        method = "SPT correlation"
-    else:
-        q_allow = q_CBR
-        method = "CBR correlation"
-    settlement = settlement_from_spt(N, B)
-
-# -------------------------------
-# DISPLAY
-# -------------------------------
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("Computed Parameters")
-    st.write(f"Plasticity Index (PI): {PI:.2f}" if PI is not None else "PI not available")
-    st.success(f"USCS Soil Type: {soil_type}")
-    st.success(f"AASHTO Classification: {aashto_type}")
-
-    if predicted:
-        st.subheader("Engineering Parameters")
-        st.write(f"OMC (%): {predicted['OMC']}")
-        st.write(f"MDD (Mg/m³): {predicted['MDD']}")
-        st.write(f"CBR (%): {predicted['CBR']}")
-        st.write(f"Permeability k (m/s): {predicted['k']:.1e}")
-        st.write(f"Cohesion c (kPa): {c}")
-        st.write(f"Friction angle φ (°): {phi}")
-        st.write(f"Unit weight γ (kN/m³): {gamma:.2f}")
-
-        st.subheader("Bearing Capacity")
-        st.write(f"Terzaghi q_ult (kPa): {qult:.2f}")
-        st.write(f"Terzaghi q_allow (kPa): {qall_terzaghi:.2f}")
-        if q_N:
-            st.write(f"From SPT N-value (kPa): {q_N:.2f}")
-        if q_CBR:
-            st.write(f"From CBR (kPa): {q_CBR:.2f}")
-        st.success(f"Adopted q_allow ({method}): {q_allow:.2f}")
-
-        st.subheader("Estimated Settlement")
-        if settlement:
-            st.write(f"Settlement ≈ {settlement:.2f} mm")
-        else:
-            st.write("Settlement requires SPT N-value")
-
-with col2:
-    st.subheader("Plasticity Chart")
-    if fines >= 50 and PI is not None:
-        st.pyplot(plot_plasticity_chart(LL, PI))
-    else:
-        st.info("Plasticity chart only for fine-grained soils with PI.")
-
-    st.subheader("Grain Size Distribution")
-    st.pyplot(plot_grain_size(gravel, sand, fines))
