@@ -137,6 +137,42 @@ def uscs_classification(LL, PI, sand, gravel, fines):
 soil_type = uscs_classification(LL, PI, sand, gravel, fines)
 
 # -------------------------------
+# DATABASE LOOKUP KEY FIX
+# -------------------------------
+lookup_key = soil_type
+
+# Remove descriptive part after dash
+if " – " in lookup_key:
+    lookup_key = lookup_key.split(" – ")[0]
+
+# Handle dual symbols (e.g., GW-GM → GM or GW depending on fines)
+if "-" in lookup_key:
+    parts = lookup_key.split("-")
+    # If fines >12 use second symbol, otherwise use first
+    if fines > 12:
+        lookup_key = parts[1]
+    else:
+        lookup_key = parts[0]
+
+# Reconstruct full key to match database format
+if lookup_key == "GW":
+    lookup_key = "GW – Well-graded gravel"
+elif lookup_key == "SW":
+    lookup_key = "SW – Well-graded sand"
+elif lookup_key == "GP":
+    lookup_key = "GP – Poorly-graded gravel"
+elif lookup_key == "SP":
+    lookup_key = "SP – Poorly-graded sand"
+elif lookup_key == "GM":
+    lookup_key = "GM – Silty gravel"
+elif lookup_key == "SM":
+    lookup_key = "SM – Silty sand"
+elif lookup_key == "GC":
+    lookup_key = "GC – Clayey gravel"
+elif lookup_key == "SC":
+    lookup_key = "SC – Clayey sand"
+
+# -------------------------------
 # AASHTO CLASSIFICATION
 # -------------------------------
 def classify_aashto(fines, LL, PI):
@@ -156,7 +192,7 @@ aashto_type = classify_aashto(fines, LL, PI)
 # -------------------------------
 # REGIONAL DATABASE (FULLY PRESERVED)
 # -------------------------------
-def regional_prediction(region, soil_type):
+def regional_prediction(region, lookup_key):
     database = {
         "North": {
             "CL – Lean Clay": {"OMC":14, "MDD":1.85, "CBR":8, "k":1e-7},
