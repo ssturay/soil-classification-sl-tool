@@ -51,7 +51,7 @@ PI = LL - PL if LL and PL else None
 # -------------------------------
 def plot_grain_size(gravel, sand, fines):
     fig, ax = plt.subplots(figsize=(7, 5))
-    ax.bar(["Gravel", "Sand", "Fines"], [gravel, sand, fines])
+    ax.bar(["Gravel", "Sand", "Fines"], [gravel, sand, fines], color=['#a0522d','#f4a460','#deb887'])
     ax.set_ylim(0, 100)
     ax.set_ylabel("Percentage (%)")
     ax.set_title("Grain Size Distribution")
@@ -62,15 +62,32 @@ def plot_plasticity_chart(LL, PI):
     fig, ax = plt.subplots(figsize=(7, 6))
     ax.set_xlim(0, 100)
     ax.set_ylim(0, 60)
+
     LL_line = np.linspace(20, 100, 200)
     PI_A = 0.73 * (LL_line - 20)
-    ax.plot(LL_line, PI_A, 'k-', label='A-line')
+    ax.plot(LL_line, PI_A, 'k-', label='A-line', linewidth=1.5)
+
+    # Shaded USCS regions
+    # CL – Lean Clay
+    LL_CL = np.linspace(20, 50, 200)
+    PI_CL = 0.73*(LL_CL - 20)
+    ax.fill_between(LL_CL, PI_CL, 60, color='#ff9999', alpha=0.5, label="CL – Lean Clay")
+    # ML – Silt
+    ax.fill_between(LL_CL, 0, PI_CL, color='#99ccff', alpha=0.5, label="ML – Silt")
+    # CH – Fat Clay
+    LL_CH = np.linspace(50, 100, 200)
+    PI_CH = 0.73*(LL_CH - 20)
+    ax.fill_between(LL_CH, PI_CH, 60, color='#ff6666', alpha=0.5, label="CH – Fat Clay")
+    # MH – Elastic Silt
+    ax.fill_between(LL_CH, 0, PI_CH, color='#6699ff', alpha=0.5, label="MH – Elastic Silt")
+
     if PI is not None:
         ax.plot(LL, PI, 'ro', markersize=8, label='Sample')
+
     ax.set_xlabel("Liquid Limit (LL)")
     ax.set_ylabel("Plasticity Index (PI)")
     ax.set_title("USCS Plasticity Chart")
-    ax.legend()
+    ax.legend(loc="upper left", fontsize=9)
     ax.grid(True)
     return fig
 
@@ -152,7 +169,7 @@ def classify_aashto(fines, LL, PI):
 aashto_type = classify_aashto(fines, LL, PI)
 
 # -------------------------------
-# REGIONAL DATABASE (FULL PIPELINE)
+# REGIONAL DATABASE (FULL)
 # -------------------------------
 def regional_prediction(region, soil_type):
     database = {
@@ -259,7 +276,7 @@ with col2:
 
         # Terzaghi bearing capacity
         phi_rad = math.radians(phi)
-        Nq = math.exp(math.pi * math.tan(phi_rad)) * (math.tan(math.radians(45 + phi/2)))**2
+        Nq = math.exp(np.pi * math.tan(phi_rad)) * (np.tan(math.radians(45 + phi/2)))**2
         Nc = (Nq - 1)/math.tan(phi_rad) if phi!=0 else 5.7
         Ngamma = 2*(Nq + 1)*math.tan(phi_rad)
         gamma_eff = gamma - 9.81 if water_table else gamma
