@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 
-st.set_page_config(layout="wide", page_title="SL Regional Soil Classification Tool 🇸🇱")
+st.set_page_config(layout="wide", page_title="SL RSCT 🇸🇱")
 
 # -------------------------------
 # SIDEBAR INPUTS
