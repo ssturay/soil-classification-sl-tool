@@ -23,9 +23,9 @@ PL = st.sidebar.number_input("Plastic Limit (PL)", 0.0, 120.0, 25.0)
 # -------------------------------
 st.sidebar.write("**Soil Composition (%)** (Total = 100%)")
 
-gravel = st.sidebar.number_input("Gravel (%)", 0.0, 100.0, 40.0)
+gravel = st.sidebar.number_input("Gravel (%)", 0.0, 100.0, 20.0)
 max_sand = max(0.0, 100.0 - gravel)
-sand = st.sidebar.number_input("Sand (%)", 0.0, max_sand, 40.0)
+sand = st.sidebar.number_input("Sand (%)", 0.0, max_sand, 20.0)
 fines = 100.0 - (gravel + sand)
 st.sidebar.text(f"Fines (%) auto-calculated: {fines:.2f}")
 
